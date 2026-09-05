@@ -38,6 +38,13 @@ function call_cache_static_sites(mixed $class, mixed $method): array
     ];
 }
 
+function call_cache_stable_object_static_method(mixed $method): int
+{
+    $object = new CallCacheStaticTarget();
+
+    return $object::$method(8);
+}
+
 class CallCacheScopedTarget
 {
     private function hidden(): int

@@ -26,9 +26,9 @@ final class CallCacheCodegenTest extends BaseTest
         self::assertIsString($code);
         self::assertIsString($extension);
         self::assertSame(1, substr_count($code, 'typephp_call_cached('));
-        self::assertSame(3, substr_count($code, 'php::callStaticMethod('));
+        self::assertSame(4, substr_count($code, 'php::callStaticMethod('));
         self::assertStringNotContainsString('php::concat({', $code);
-        self::assertSame(8, substr_count($code, 'php::VarList{'));
+        self::assertSame(9, substr_count($code, 'php::VarList{'));
         self::assertStringNotContainsString('std::array<php::Variant', $code);
         self::assertStringNotContainsString('php::ArgList{', $code);
         self::assertSame(2, substr_count($code, 'typephp_call_method_cached('));
