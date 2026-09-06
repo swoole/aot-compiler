@@ -568,7 +568,7 @@ trait AssignOpTrait
                         // Parent/interface/abstract declarations are not precise enough for a concrete typed object.
                         $runtimeObjectAssignClass = $leftClass;
                     } else {
-                        $this->fatalError($left, "Cannot re-assign typed object `\${$var}` from `{$leftClass}` to `{$rightClass}`");
+                        $this->reassignInferredObjectVar($left, $var, $leftClass, $rightClass);
                     }
                 } else {
                     $this->checkVarAssignExpr($left, $this->getVarType($var), Type::OBJECT);
@@ -644,7 +644,7 @@ trait AssignOpTrait
                         } elseif ($this->isInterface($rightClass) || $this->isAbstractClass($rightClass) || $this->isObjectClassStaticallyAssignableTo($leftClass, $rightClass)) {
                             $runtimeObjectAssignClass = $leftClass;
                         } else {
-                            $this->fatalError($left, "Cannot re-assign typed object `\${$var}` from `{$leftClass}` to `{$rightClass}`");
+                            $this->reassignInferredObjectVar($left, $var, $leftClass, $rightClass);
                         }
                     }
                 }
@@ -731,6 +731,27 @@ trait AssignOpTrait
             return '';
         }
         return $var . ' = ' . $assignedExpr;
+    }
+
+    /**
+     * PHP local variables carry no type declaration; the class tracked for
+     * `$var` was inferred from an earlier assignment. Re-assigning an unrelated
+     * concrete class in a mutually exclusive branch (for example if/else) is
+     * valid PHP, so widen the inferred local to a generic dynamic object rather
+     * than rejecting it. Parameters, native objects, and explicitly declared
+     * object types keep their strict re-assignment check.
+     */
+    protected function reassignInferredObjectVar(Expr $left, string $var, string $leftClass, string $rightClass): void
+    {
+        $canWiden = !$this->hasArgument($var)
+            && !$this->isNativeObjectVar($var)
+            && isset($this->context->objects[$var])
+            && !isset($this->context->declaredObjects[$var]);
+        if (!$canWiden) {
+            $this->fatalError($left, "Cannot re-assign typed object `\${$var}` from `{$leftClass}` to `{$rightClass}`");
+        }
+        unset($this->context->objects[$var], $this->context->stableObjects[$var], $this->context->declaredObjects[$var]);
+        $this->addLocalVar($var, Type::OBJECT);
     }
 
     protected function parseAssignPropertyHook(
