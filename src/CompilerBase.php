@@ -3142,8 +3142,13 @@ class CompilerBase implements PropertyAccessContext
                 if ($this->isNameExpr($expr->name)) {
                     $name = $this->parseIdentifier($expr->name);
                     $globalName = ltrim($name, '\\');
-                    // Math function optimization: propagate Big* return types
-                    if (in_array($name, ['abs', 'pow', 'sqrt', 'floor', 'ceil', 'round'], true) && !empty($expr->args)) {
+                    // Math function optimization: propagate Big* return types.
+                    // Skip first-class callables like `round(...)`: their single
+                    // VariadicPlaceholder arg has no ->value, and they resolve to
+                    // a Closure (Type::OBJECT) further below.
+                    if (in_array($name, ['abs', 'pow', 'sqrt', 'floor', 'ceil', 'round'], true)
+                        && !empty($expr->args)
+                        && !$expr->isFirstClassCallable()) {
                         $argType = $this->detectTypeOfExpr($expr->args[0]->value);
                         if (
                             $argType === Type::BIGINT
@@ -3456,6 +3461,12 @@ class CompilerBase implements PropertyAccessContext
             $this->validateInternalNamedCallArgs($ref, $expr->args);
         }
         if ($this->hasUnpackCallArg($expr->args)) {
+            return;
+        }
+        // `foo(...)` is PHP 8.1 first-class callable syntax: it creates a
+        // Closure instead of calling foo, so its single VariadicPlaceholder
+        // must not be counted/validated against foo's real signature.
+        if ($expr->isFirstClassCallable()) {
             return;
         }
         $actualArgCount = count($expr->args);
