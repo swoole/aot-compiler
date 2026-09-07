@@ -1,6 +1,6 @@
 # Integer min/max benchmark
 
-This benchmark repeatedly clamps integer damage and accumulates a checksum. It
+This benchmark repeatedly clamps integer values and accumulates a checksum. It
 isolates two-argument integer `min()` / `max()` calls; it is not representative
 of every PHP workload. It emits one line after the loop, so terminal output is
 not part of the hot path.
@@ -29,13 +29,7 @@ Nine measured runs per binary after one discarded pair, 10,000,000 iterations:
 | Baseline | 482.56 ms | 456.41–497.78 ms |
 | Integer lowering | 48.01 ms | 44.10–57.38 ms |
 
-This is a 10.05x speedup for the isolated workload. A separate local turn-based
-game test (100,000 games, nine samples) had medians of 1648.95 ms and
-1610.13 ms, a 2.35% reduction. The game samples overlap substantially;
-that small difference is not established as a reliable whole-game speedup.
-
-The game includes many object, array, and string operations. This change does
-not imply that AOT is universally faster than PHP or JIT. Timings come from a
-shared development machine, not a dedicated benchmark host. Raw microbenchmark
+This is a 10.05x speedup for the isolated integer min/max workload. Timings
+come from a shared development machine, not a dedicated benchmark host. Raw
 samples are in `results-arm64.json`; times include process startup and exclude
 compilation.
