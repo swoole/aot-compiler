@@ -102,6 +102,9 @@ trait FuncCallOptimizer
         ];
 
         $extra = [
+            'min' => ['handler' => 'genIntegerMinMax'],
+            'max' => ['handler' => 'genIntegerMinMax'],
+
             // Aliases (PHP function name → C++ target name)
             'join'             => 'implode',
             'stristr'          => 'stristr',
@@ -1179,6 +1182,61 @@ trait FuncCallOptimizer
         $key = $this->getArg($e, 0);
         $array = $this->getArg($e, 1);
         return $array . '.offsetExists(' . $key . ')';
+    }
+
+    protected function genIntegerMinMax(string $name, Node\Expr\FuncCall $expr, array $config): string|false
+    {
+        // PHP also accepts arrays, mixed types and variadic arguments. Only
+        // two proven integers have the same comparison and result semantics
+        // as a native scalar selection; leave every other form to Zend.
+        if (count($expr->args) !== 2) {
+            return false;
+        }
+        foreach ($expr->args as $arg) {
+            if (!$this->isExactIntegerMinMaxOperand($arg->value)) {
+                return false;
+            }
+        }
+
+        // Reuse ordinary call operand lowering: materialize side effects once,
+        // but preserve PHP's deferred reads of simple variable arguments.
+        // Casts may warn or invoke an object conversion even without nested
+        // calls, so snapshot them before repeating operands in the selection.
+        $left = $expr->args[0]->value instanceof Node\Expr\Cast\Int_
+            ? $this->parseOrderedOperand($expr->args[0]->value, false, true)
+            : $this->getArg($expr, 0);
+        $right = $expr->args[1]->value instanceof Node\Expr\Cast\Int_
+            ? $this->parseOrderedOperand($expr->args[1]->value, false, true)
+            : $this->getArg($expr, 1);
+        $operator = $name === 'min' ? '<' : '>';
+        return '(' . $left . ' ' . $operator . ' ' . $right . ' ? ' . $left . ' : ' . $right . ')';
+    }
+
+    protected function isExactIntegerMinMaxOperand(Node\Expr $expr): bool
+    {
+        if (!$this->usesNativeScalarStorage(Type::INT)
+            || $this->detectTypeOfExpr($expr) !== Type::INT
+        ) {
+            return false;
+        }
+        if ($expr instanceof Node\Expr\Variable && is_string($expr->name)) {
+            // Require actual native storage, not a flow-sensitive approximation
+            // of the value held by a mixed/overflow-capable variable.
+            return $this->getVarType($this->parseIdentifier($expr)) === Type::INT;
+        }
+        if ($expr instanceof Node\Expr\PropertyFetch && $expr->name instanceof Node\Identifier) {
+            $class = $this->resolveObjectClassDef($expr->var);
+            if ($class !== null && $class->hasProperty($expr->name->toString())) {
+                $property = $class->getProperty($expr->name->toString());
+                return $property->type === Type::INT && !$property->nullable;
+            }
+            return false;
+        }
+        // Arithmetic inference can report INT for mixed + int, even though
+        // the value may be a float. Keep computations, calls and unresolved
+        // property/constant reads on Zend's path.
+        return $expr instanceof Node\Scalar\Int_
+            || $expr instanceof Node\Expr\Cast\Int_;
     }
 
     protected function genRound(string $n, Node\Expr\FuncCall $e, array $c): string|false

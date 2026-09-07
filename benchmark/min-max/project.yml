@@ -1,0 +1,5 @@
+name: min-max-benchmark
+build-mode: bin
+optimize: 2
+sources:
+  - benchmark.php

@@ -1,0 +1,35 @@
+{
+  "baseline": "72b7ce9b",
+  "candidate": "simple integer min/max lowering",
+  "php": "8.5.10 ZTS",
+  "phpx": "6a68f38",
+  "platform": "Linux ARM64 Docker",
+  "optimization": "O2",
+  "method": "alternate order; one discarded pair; nine measured pairs; wall time including process startup; seconds",
+  "count": 10000000,
+  "checksum": "236310950",
+  "samples": {
+    "candidate": [
+      0.057375312,
+      0.045864502,
+      0.048057849,
+      0.045604484,
+      0.048013895,
+      0.045256348,
+      0.04409891,
+      0.048323617,
+      0.049788737
+    ],
+    "baseline": [
+      0.482051066,
+      0.482560355,
+      0.478532421,
+      0.497780501,
+      0.484743119,
+      0.456406973,
+      0.472020001,
+      0.483321787,
+      0.489281674
+    ]
+  }
+}
