@@ -856,11 +856,10 @@ trait MethodCallTrait
         } else {
             $funcName = '';
         }
-        // A variable method name explicitly requests runtime dispatch. Such a
-        // call site commonly receives unrelated route/callback names, so a
-        // monomorphic method cache adds guards and request state without a
-        // reliable hit rate. Cache only a source-level identifier.
-        $cacheMethod = $this->isNamedMethod($expr->name);
+        // Variable method names may change between calls, making a monomorphic
+        // cache ineffective. Literal strings are as stable as identifiers;
+        // retain runtime resolution while caching their resolved method.
+        $cacheMethod = $this->isNamedMethod($expr->name) || $this->isScalarString($expr->name);
 
         $requiresDynamicScope = $this->runtimeMethodRequiresDynamicScope(
             $class,

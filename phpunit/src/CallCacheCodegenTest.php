@@ -43,6 +43,21 @@ final class CallCacheCodegenTest extends BaseTest
         self::assertStringContainsString('typephp_get_method_call_cache(MethodCallCacheId cache_id)', $extension);
     }
 
+    public function testLiteralMethodNamesReuseRuntimeCaches(): void
+    {
+        global $translator;
+
+        $compiler = CompilerTest::create(TYPEPHP_ROOT_PATH);
+        $translator = $compiler;
+        $source = TYPEPHP_ROOT_PATH . '/phpunit/code/literal-method-cache.php';
+        $compiler->addFiles([$source]);
+        $compiler->prepareFile($source);
+        $code = file_get_contents($compiler->convertFile($source));
+
+        self::assertSame(2, substr_count($code, 'typephp_call_method_cached('));
+        self::assertSame(1, substr_count($code, 'typephp_call_method_scoped_cached('));
+    }
+
     public function testCallArgumentLimitRejectsBrokenUnboundedLowering(): void
     {
         $compiler = CompilerTest::create(TYPEPHP_ROOT_PATH);

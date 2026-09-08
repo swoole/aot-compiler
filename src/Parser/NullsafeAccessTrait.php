@@ -118,7 +118,7 @@ trait NullsafeAccessTrait
                     $code .= $this->formatCapturedStmtLines($argBeforeStmts);
                 }
                 if ($requiresDynamicScope && $this->methodDef) {
-                    if ($this->isNamedMethod($item[4]->name)) {
+                    if ($this->isNamedMethod($item[4]->name) || $this->isScalarString($item[4]->name)) {
                         $code .= $this->getIndent()
                             . "{$tmpVar} = typephp_call_method_scoped_cached({$object}, {$item[1]}, "
                             . $this->getCallableScopeExpr() . ', ' . $this->getMethodCallCache()
@@ -128,7 +128,7 @@ trait NullsafeAccessTrait
                             . $this->getCallableScopeExpr() . ", {$args});" . PHP_EOL;
                     }
                 } else {
-                    if ($this->isNamedMethod($item[4]->name)) {
+                    if ($this->isNamedMethod($item[4]->name) || $this->isScalarString($item[4]->name)) {
                         $code .= $this->getIndent() . "{$tmpVar} = typephp_call_method_cached({$object}, {$item[1]}, "
                             . $this->getMethodCallCache() . ", {$args});" . PHP_EOL;
                     } else {
