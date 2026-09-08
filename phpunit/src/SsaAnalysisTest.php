@@ -1345,6 +1345,18 @@ class SsaAnalysisTest extends TestCase
         }
     }
 
+    public function testDetectTypeOfFirstClassCallableBeforeBuiltinReturnTypeOptimizations(): void
+    {
+        foreach (['round', 'fopen'] as $function) {
+            $call = new Expr\FuncCall(
+                new Node\Name($function),
+                [new Node\VariadicPlaceholder()]
+            );
+
+            $this->assertSame(Type::OBJECT, $this->invoke('detectTypeOfExpr', $call));
+        }
+    }
+
     public function testDetectTypeOfConcatExpressions(): void
     {
         $concat = new Expr\BinaryOp\Concat(new Scalar\LNumber(1), new Scalar\String_(''));

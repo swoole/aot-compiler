@@ -3139,16 +3139,15 @@ class CompilerBase implements PropertyAccessContext
                 }
                 break;
             case 'Expr_FuncCall':
+                if ($expr->isFirstClassCallable()) {
+                    return Type::OBJECT;
+                }
                 if ($this->isNameExpr($expr->name)) {
                     $name = $this->parseIdentifier($expr->name);
                     $globalName = ltrim($name, '\\');
-                    // Math function optimization: propagate Big* return types.
-                    // Skip first-class callables like `round(...)`: their single
-                    // VariadicPlaceholder arg has no ->value, and they resolve to
-                    // a Closure (Type::OBJECT) further below.
+                    // Math function optimization: propagate Big* return types
                     if (in_array($name, ['abs', 'pow', 'sqrt', 'floor', 'ceil', 'round'], true)
-                        && !empty($expr->args)
-                        && !$expr->isFirstClassCallable()) {
+                        && !empty($expr->args)) {
                         $argType = $this->detectTypeOfExpr($expr->args[0]->value);
                         if (
                             $argType === Type::BIGINT
@@ -3171,9 +3170,6 @@ class CompilerBase implements PropertyAccessContext
                     }
                     if (in_array($name, self::STREAM_FUNCTIONS)) {
                         return Type::STREAM;
-                    }
-                    if (count($expr->args) === 1 and $this->isPlaceholderExpr($expr->args[0])) {
-                        return Type::OBJECT;
                     }
                     if ($this->hasFunction($name)) {
                         return $this->getFunction($name)->returnType;
