@@ -59,7 +59,7 @@ class NativePropertyTest extends \BaseTest
         }
 
         $code = file_get_contents($outputFile);
-        $this->assertStringContainsString('php::Int &_object_prop_this___value = Z_LVAL_P(this_.attr(', $code);
+        $this->assertStringContainsString('php::Int &_object_prop_this___value = Z_LVAL_P(php::unwrap_zval(OBJ_PROP(this_.checkedObject("Attempt to read property"), ', $code);
         $this->assertStringContainsString('php::Int &_object_prop_box__value = Z_LVAL_P(box.attr(', $code);
         $this->assertStringContainsString('_object_prop_this___value += (2L);', $code);
         $this->assertStringContainsString('_object_prop_box__value += (2L);', $code);
@@ -92,7 +92,7 @@ class NativePropertyTest extends \BaseTest
         }
 
         $code = file_get_contents($outputFile);
-        $this->assertStringContainsString('php::Int &_object_prop_this___flags = Z_LVAL_P(this_.attr(', $code);
+        $this->assertStringContainsString('php::Int &_object_prop_this___flags = Z_LVAL_P(php::unwrap_zval(OBJ_PROP(this_.checkedObject("Attempt to read property"), ', $code);
         // A TypePHP class constant is available during conversion and is
         // folded before the native property operation is emitted.
         $this->assertStringContainsString('_object_prop_this___flags &= (~php::toInt(1L));', $code);
@@ -125,7 +125,7 @@ class NativePropertyTest extends \BaseTest
         }
 
         $code = file_get_contents($outputFile);
-        $this->assertStringContainsString('php::Int &_object_prop_this___value = Z_LVAL_P(this_.attr(', $code);
+        $this->assertStringContainsString('php::Int &_object_prop_this___value = Z_LVAL_P(php::unwrap_zval(OBJ_PROP(this_.checkedObject("Attempt to read property"), ', $code);
         $this->assertStringContainsString('_object_prop_this___value = php::toIntExact(dynamicValue, "NativePropertyThisWriteConversionBox::$value");', $code);
     }
 

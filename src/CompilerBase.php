@@ -5341,7 +5341,7 @@ class CompilerBase implements PropertyAccessContext
                 $code .= $this->getIndent() . Type::VAR . ' ' . $name . ' = ' . $info['getter'] . ';' . PHP_EOL;
             } else {
                 $zvalMacro = ($info['type'] === Type::FLOAT) ? 'Z_DVAL_P' : 'Z_LVAL_P';
-                $code .= $this->getIndent() . $info['type'] . ' &' . $name . ' = ' . $zvalMacro . '(' . $info['getter'] . '.unwrap_ptr());' . PHP_EOL;
+                $code .= $this->getIndent() . $info['type'] . ' &' . $name . ' = ' . $zvalMacro . '(' . $info['getter'] . ');' . PHP_EOL;
             }
         }
         foreach ($this->context->staticPropRefs as $info) {

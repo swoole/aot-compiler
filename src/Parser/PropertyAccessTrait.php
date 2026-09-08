@@ -1382,6 +1382,11 @@ trait PropertyAccessTrait
             if (!$this->canHoistObjectProp($objectVar, $propName, $def)) {
                 return null;
             }
+            if (in_array($def->type, [Type::INT, Type::FLOAT], true)) {
+                // Bind the native reference to the fixed slot without a temporary Variant.
+                $getter = 'php::unwrap_zval(OBJ_PROP(' . $objectVar
+                    . '.checkedObject("Attempt to read property"), ' . $propertyId . '))';
+            }
             $this->registerHoistedObjectPropVar($propVar, $def->type, $getter);
             $this->setNativePropertyVar($expr, $propVar);
             $this->setNativePropertyValueSource($expr, self::NATIVE_PROPERTY_VALUE_VAR);
