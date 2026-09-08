@@ -13,6 +13,8 @@ function hotPathCodegen(int $limit): int
 
     $items[0] = $value;
     $items[] = $value;
+    $items[] = hotPathTrace('append');
+    $appendResult = ($items[] = $value);
     $items[0] += $value;
     $items[0] += $other[0];
     $items[2] = $other[0];

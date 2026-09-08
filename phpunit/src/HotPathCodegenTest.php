@@ -16,6 +16,14 @@ final class HotPathCodegenTest extends \BaseTest
         self::assertStringContainsString('items.offsetSet(0L,', $code);
     }
 
+    public function testKnownArrayAppendFallbackAvoidsDynamicDispatch(): void
+    {
+        $code = $this->compileFixture();
+
+        self::assertStringNotContainsString('items.offsetSet(php::null,', $code);
+        self::assertMatchesRegularExpression('/items\.append\(tmp_var_\d+\)/', $code);
+    }
+
     public function testSafeTwoOperandConcatAndExactStringArgumentStayUnboxed(): void
     {
         $code = $this->compileFixture();

@@ -76,6 +76,9 @@ trait AssignOpTrait
                 return $code . $array . '.appendValue(' . $value . ')';
             }
             $tmp = $this->addTmpVar(Type::VAR);
+            if ($arrayType === Type::ARRAY) {
+                return $code . '((' . $tmp . ' = ' . $value . ', ' . "{$array}.append({$tmp})" . '), ' . $tmp . ')';
+            }
             return $code . '((' . $tmp . ' = ' . $value . ', ' . "{$array}.offsetSet(" . self::VALUE_NULL . ", {$tmp})" . '), ' . $tmp . ')';
         }
         $dim = $this->parseIdentifier($left->dim);
