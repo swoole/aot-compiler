@@ -223,24 +223,12 @@ final class LocalClosureAnalyzer
         return true;
     }
 
-    /**
-     * Infer closure parameter types from call site arguments.
-     *
-     * Only infers when:
-     * - There is exactly one call site (single call site)
-     * - All arguments have detectable types
-     * - The inferred type is a native type (int, float, bool, string, array)
-     *
-     * @param array{assignment: Expr\Assign, closure: Expr\Closure|Expr\ArrowFunction, calls: int, callSites: list<Expr\FuncCall>} $candidate
-     * @return list<string> Parameter types (Type::VAR for unknown)
-     */
     public function inferParamTypes(array $candidate): array
     {
         $closure = $candidate['closure'];
         $paramCount = count($closure->params);
         $callSites = $candidate['callSites'];
 
-        // Only infer for single call site
         if (count($callSites) !== 1) {
             return array_fill(0, $paramCount, Type::VAR);
         }
@@ -256,48 +244,68 @@ final class LocalClosureAnalyzer
         return $inferredTypes;
     }
 
-    /**
-     * Detect the type of an argument expression.
-     */
     private function detectArgType(Expr $expr): string
     {
-        // Literal integers
         if ($expr instanceof Node\Scalar\Int_) {
             return Type::INT;
         }
 
-        // Literal floats
         if ($expr instanceof Node\Scalar\Float_) {
             return Type::FLOAT;
         }
 
-        // Literal strings
         if ($expr instanceof Node\Scalar\String_) {
             return Type::STR;
         }
 
-        // Boolean constants
+        if ($expr instanceof Expr\UnaryMinus || $expr instanceof Expr\UnaryPlus) {
+            return $this->detectArgType($expr->expr);
+        }
+
+        if ($expr instanceof Expr\BooleanNot
+            || $expr instanceof Expr\BinaryOp\BooleanAnd
+            || $expr instanceof Expr\BinaryOp\BooleanOr
+            || $expr instanceof Expr\BinaryOp\LogicalAnd
+            || $expr instanceof Expr\BinaryOp\LogicalOr
+            || $expr instanceof Expr\BinaryOp\Identical
+            || $expr instanceof Expr\BinaryOp\NotIdentical
+            || $expr instanceof Expr\BinaryOp\Equal
+            || $expr instanceof Expr\BinaryOp\NotEqual
+            || $expr instanceof Expr\BinaryOp\Smaller
+            || $expr instanceof Expr\BinaryOp\SmallerOrEqual
+            || $expr instanceof Expr\BinaryOp\Greater
+            || $expr instanceof Expr\BinaryOp\GreaterOrEqual
+            || $expr instanceof Expr\BinaryOp\Spaceship
+            || $expr instanceof Expr\Instanceof_
+        ) {
+            return Type::BOOL;
+        }
+
+        if ($expr instanceof Expr\BinaryOp\Concat) {
+            $left = $this->detectArgType($expr->left);
+            $right = $this->detectArgType($expr->right);
+            if ($left === Type::STR && $right === Type::STR) {
+                return Type::STR;
+            }
+            return Type::VAR;
+        }
+
         if ($expr instanceof Expr\ConstFetch && $expr->name instanceof Node\Name) {
             $name = strtolower($expr->name->toString());
             if ($name === 'true' || $name === 'false') {
                 return Type::BOOL;
             }
-            // null can be any type, keep as VAR
             return Type::VAR;
         }
 
-        // Array literals
         if ($expr instanceof Expr\Array_) {
             return Type::ARRAY;
         }
 
-        // Variables — could be extended to use SSA type info
-        // For now, keep as VAR (the closure body will use native type if inferred)
         if ($expr instanceof Expr\Variable) {
             return Type::VAR;
         }
 
-        // Function calls that return known types
         if ($expr instanceof Expr\FuncCall && $expr->name instanceof Node\Name) {
             $name = strtolower($expr->name->toString());
             if (in_array($name, ['count', 'strlen', 'sizeof'], true)) {
