@@ -58,4 +58,53 @@ final class ClosureParamTypeTest extends BaseTest
 
         self::assertStringContainsString('(php::Var x)', $code);
     }
+
+    public function testUnaryMinusInfersNativeType(): void
+    {
+        global $translator;
+
+        $compiler = CompilerTest::create(TYPEPHP_ROOT_PATH);
+        $translator = $compiler;
+        $source = TYPEPHP_ROOT_PATH . '/phpunit/code/closure-param-type.php';
+        $compiler->addFiles([$source]);
+        $compiler->prepareFile($source);
+        $code = file_get_contents($compiler->convertFile($source));
+
+        self::assertIsString($code);
+
+        self::assertStringContainsString('(php::Int x)', $code);
+        self::assertStringContainsString('(php::Float x)', $code);
+    }
+
+    public function testBooleanExpressionsInferBoolType(): void
+    {
+        global $translator;
+
+        $compiler = CompilerTest::create(TYPEPHP_ROOT_PATH);
+        $translator = $compiler;
+        $source = TYPEPHP_ROOT_PATH . '/phpunit/code/closure-param-type.php';
+        $compiler->addFiles([$source]);
+        $compiler->prepareFile($source);
+        $code = file_get_contents($compiler->convertFile($source));
+
+        self::assertIsString($code);
+
+        self::assertStringContainsString('(php::Bool x)', $code);
+    }
+
+    public function testConcatStringInference(): void
+    {
+        global $translator;
+
+        $compiler = CompilerTest::create(TYPEPHP_ROOT_PATH);
+        $translator = $compiler;
+        $source = TYPEPHP_ROOT_PATH . '/phpunit/code/closure-param-type.php';
+        $compiler->addFiles([$source]);
+        $compiler->prepareFile($source);
+        $code = file_get_contents($compiler->convertFile($source));
+
+        self::assertIsString($code);
+
+        self::assertStringContainsString('(php::Str x)', $code);
+    }
 }
