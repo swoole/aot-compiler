@@ -129,9 +129,23 @@ trait ClosureGenerator
         $entryContext = $this->context;
         $entryIndent = $this->indentLevel;
         $entryInGeneratorBody = $this->inGeneratorBody;
+
+        // Get inferred types from call sites (Phase 2)
+        $inferredTypes = $candidate['inferredParamTypes'] ?? array_fill(0, count($expr->params), Type::VAR);
+
         $parameters = [];
-        foreach ($expr->params as $param) {
-            $parameters[] = Type::VAR . ' ' . $this->parseIdentifier($param->var);
+        foreach ($expr->params as $i => $param) {
+            $paramType = $inferredTypes[$i] ?? Type::VAR;
+
+            // Type declarations take priority over call-site inference
+            if ($param->type !== null) {
+                [$resolvedType,] = $this->resolveTypeDecl($param->type, self::DECL_TYPE_OF_PARAM);
+                // Only use native types (int/float/bool/string/array), keep object as VAR
+                if (in_array($resolvedType, [Type::INT, Type::FLOAT, Type::BOOL, Type::STR, Type::ARRAY], true)) {
+                    $paramType = $resolvedType;
+                }
+            }
+            $parameters[] = $paramType . ' ' . $this->parseIdentifier($param->var);
         }
 
         $code = 'auto ' . $name . ' = [' . implode(', ', $capturePlan['cpp']) . ']('
@@ -158,7 +172,14 @@ trait ClosureGenerator
             $parameterChecks = '';
             foreach ($expr->params as $index => $param) {
                 $paramName = $this->parseIdentifier($param->var);
-                $this->addArgument($paramName, Type::VAR);
+                $paramType = $inferredTypes[$index] ?? Type::VAR;
+                if ($param->type !== null) {
+                    [$resolvedType,] = $this->resolveTypeDecl($param->type, self::DECL_TYPE_OF_PARAM);
+                    if (in_array($resolvedType, [Type::INT, Type::FLOAT, Type::BOOL, Type::STR, Type::ARRAY], true)) {
+                        $paramType = $resolvedType;
+                    }
+                }
+                $this->addArgument($paramName, $paramType);
                 if (CompileTimeAttribute::consume($param, 'Immutable')) {
                     $this->context->immutableVars[$paramName] = true;
                     if ($this->immutableTypeNodeMayBeObject($param->type)) {
@@ -273,6 +294,16 @@ trait ClosureGenerator
         if ($param->type === null) {
             return '';
         }
+
+        // Skip type check if parameter is already a native type (not php::Var).
+        // When the parameter type is resolved to a native C++ type (int, float,
+        // bool, string, array), the value is already unwrapped at the ABI level
+        // and a Z_TYPE_P check against php::Int/Float/etc. would be meaningless.
+        [$resolvedType,] = $this->resolveTypeDecl($param->type, self::DECL_TYPE_OF_PARAM);
+        if (in_array($resolvedType, [Type::INT, Type::FLOAT, Type::BOOL, Type::STR, Type::ARRAY], true)) {
+            return '';
+        }
+
         $typeInfo = $this->buildTypeCheckFromNode($param->type, true);
         if (empty($typeInfo['check'])) {
             return '';
