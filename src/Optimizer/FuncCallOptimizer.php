@@ -1329,6 +1329,13 @@ trait FuncCallOptimizer
 
         $folded = $this->doFoldCountLiteral($e);
         if ($folded !== false) return $folded;
+        if (count($e->args) === 1
+            && $receiver instanceof Node\Arg
+            && $this->isVarExpr($receiver->value)
+            && $this->argumentAlreadyHasExactType($receiver->value, Type::ARRAY)
+        ) {
+            return 'static_cast<' . Type::INT . '>(' . $this->getArg($e, 0) . '.count())';
+        }
         if (count($e->args) >= 2) {
             return 'php::fn::count(' . $this->getArg($e, 0) . ', ' . $this->convertIntExpr($this->getArg($e, 1)) . ')';
         }

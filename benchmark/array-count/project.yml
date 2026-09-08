@@ -1,0 +1,5 @@
+name: array-count-benchmark
+build-mode: bin
+optimize: 2
+sources:
+  - benchmark.php
