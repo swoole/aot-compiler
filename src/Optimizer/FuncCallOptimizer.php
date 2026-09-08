@@ -1332,6 +1332,7 @@ trait FuncCallOptimizer
         if (count($e->args) === 1
             && $receiver instanceof Node\Arg
             && $this->isVarExpr($receiver->value)
+            && $this->hasLocalVar($receiver->value->name)
             && $this->argumentAlreadyHasExactType($receiver->value, Type::ARRAY)
         ) {
             return 'static_cast<' . Type::INT . '>(' . $this->getArg($e, 0) . '.count())';

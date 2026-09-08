@@ -50,7 +50,7 @@ class CountLiteralFoldTest extends TestCase
         $cpp = $this->compileToCpp('count-known-array.php');
 
         self::assertStringContainsString('static_cast<php::Int>(items.count())', $cpp);
-        self::assertSame(2, substr_count($cpp, 'php::fn::count('));
+        self::assertSame(4, substr_count($cpp, 'php::fn::count('));
     }
 
     private function compileToCpp(string $file): string

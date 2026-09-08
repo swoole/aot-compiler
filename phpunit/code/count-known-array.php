@@ -6,3 +6,8 @@ function knownArrayCount(array $items, mixed $dynamic): int
     $unknown = count($dynamic);
     return $normal + $recursive + $unknown;
 }
+
+function globalArrayCount(): int
+{
+    return count($GLOBALS) + count($_SERVER);
+}
