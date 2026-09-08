@@ -130,7 +130,6 @@ trait ClosureGenerator
         $entryIndent = $this->indentLevel;
         $entryInGeneratorBody = $this->inGeneratorBody;
 
-        // Get inferred types from call sites (Phase 2)
         $inferredTypes = $candidate['inferredParamTypes'] ?? array_fill(0, count($expr->params), Type::VAR);
 
         $parameters = [];
