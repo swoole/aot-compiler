@@ -129,9 +129,16 @@ trait ClosureGenerator
         $entryContext = $this->context;
         $entryIndent = $this->indentLevel;
         $entryInGeneratorBody = $this->inGeneratorBody;
+
+        // Get inferred types from call sites
+        $inferredTypes = $candidate['inferredParamTypes'] ?? array_fill(0, count($expr->params), Type::VAR);
+
         $parameters = [];
-        foreach ($expr->params as $param) {
-            $parameters[] = Type::VAR . ' ' . $this->parseIdentifier($param->var);
+        foreach ($expr->params as $i => $param) {
+            $inferredType = $inferredTypes[$i] ?? Type::VAR;
+            $paramType = $this->resolveEffectiveClosureParamType($param, $inferredType);
+
+            $parameters[] = $paramType . ' ' . $this->parseIdentifier($param->var);
         }
 
         $code = 'auto ' . $name . ' = [' . implode(', ', $capturePlan['cpp']) . ']('
@@ -158,7 +165,10 @@ trait ClosureGenerator
             $parameterChecks = '';
             foreach ($expr->params as $index => $param) {
                 $paramName = $this->parseIdentifier($param->var);
-                $this->addArgument($paramName, Type::VAR);
+                $inferredType = $inferredTypes[$index] ?? Type::VAR;
+                $effectiveType = $this->resolveEffectiveClosureParamType($param, $inferredType);
+
+                $this->addArgument($paramName, $effectiveType);
                 if (CompileTimeAttribute::consume($param, 'Immutable')) {
                     $this->context->immutableVars[$paramName] = true;
                     if ($this->immutableTypeNodeMayBeObject($param->type)) {
@@ -174,7 +184,7 @@ trait ClosureGenerator
                         }
                     }
                 }
-                $parameterChecks .= $this->genNativeLocalClosureParamTypeCheck($param, $paramName, $index);
+                $parameterChecks .= $this->genNativeLocalClosureParamTypeCheck($param, $paramName, $index, $effectiveType);
             }
 
             foreach ($capturePlan['bindings'] as $binding) {
@@ -268,11 +278,19 @@ trait ClosureGenerator
         return ['cpp' => $cpp, 'bindings' => $bindings];
     }
 
-    private function genNativeLocalClosureParamTypeCheck(Node\Param $param, string $var, int $index): string
+    private function genNativeLocalClosureParamTypeCheck(Node\Param $param, string $var, int $index, string $inferredType): string
     {
         if ($param->type === null) {
             return '';
         }
+
+        // Skip type check if call-site inference already narrowed to a native
+        // type — the lambda signature uses the native C++ type directly and the
+        // check code (e.g. value.isInt()) only works on php::Var.
+        if (in_array($inferredType, [Type::INT, Type::FLOAT, Type::BOOL, Type::STR, Type::ARRAY], true)) {
+            return '';
+        }
+
         $typeInfo = $this->buildTypeCheckFromNode($param->type, true);
         if (empty($typeInfo['check'])) {
             return '';
@@ -290,15 +308,36 @@ trait ClosureGenerator
         return $this->genClosureParamCheck($argInfo, $index);
     }
 
+    /**
+     * Return the inferred type for a closure parameter.
+     *
+     * When call-site inference returns a native type (e.g. Type::INT from a
+     * literal argument), use it directly. When it returns VAR, keep the
+     * parameter as php::Var — the lambda will perform a runtime type check
+     * internally instead of an expensive call-site conversion.
+     */
+    private function resolveEffectiveClosureParamType(Node\Param $param, string $inferredType): string
+    {
+        return $inferredType;
+    }
+
     protected function parseNativeLocalClosureCall(Expr\FuncCall $expr, string $name): ?string
     {
         if (!isset($this->context->nativeLocalClosures[$name])) {
             return null;
         }
 
+        // Look up candidate for type information
+        $candidate = $this->context->localClosureCandidates[$name] ?? null;
+        if ($candidate === null) {
+            return null;
+        }
+        $closure = $candidate['closure'] ?? null;
+        $inferredTypes = $candidate['inferredParamTypes'] ?? [];
+
         $arguments = [];
         $forceMaterialize = count($expr->args) > 1;
-        foreach ($expr->args as $argument) {
+        foreach ($expr->args as $i => $argument) {
             $this->assertExprCanBeUsedAsValue($argument->value, 'function argument');
             if ($this->isVarExpr($argument->value)) {
                 $this->assertStdContainerDoesNotEscapeNativeObjects(
@@ -321,7 +360,31 @@ trait ClosureGenerator
             } else {
                 $value = $this->parseOrderedOperand($argument->value, false, $forceMaterialize);
             }
-            $arguments[] = $this->materializeCallArgValue($argument->value, $value);
+            $value = $this->materializeCallArgValue($argument->value, $value);
+
+            // Cast variable arguments at call site when effective type differs
+            // from inferred type (e.g. type declaration narrows to native type).
+            $inferredType = $inferredTypes[$i] ?? Type::VAR;
+            $param = $closure->params[$i] ?? null;
+            if ($param !== null) {
+                $effectiveType = $this->resolveEffectiveClosureParamType($param, $inferredType);
+                if ($effectiveType !== $inferredType) {
+                    // effectiveType differs from inferred — need to cast at call site
+                    $castFunc = match ($effectiveType) {
+                        Type::INT => 'php::toIntArgExact',
+                        Type::FLOAT => 'php::toFloatArgExact',
+                        Type::BOOL => 'php::toBoolArgExact',
+                        Type::STR => 'php::toStringArgExact',
+                        default => null,
+                    };
+                    if ($castFunc !== null) {
+                        $paramName = is_string($param->var->name) ? $param->var->name : '?';
+                        $value = $castFunc . '(' . $value . ', "{closure}", ' . ($i + 1) . ', "' . $paramName . '")';
+                    }
+                }
+            }
+
+            $arguments[] = $value;
         }
         return $name . '(' . implode(', ', $arguments) . ')';
     }
