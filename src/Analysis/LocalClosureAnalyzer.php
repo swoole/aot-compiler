@@ -12,6 +12,7 @@ use PhpParser\Node;
 use PhpParser\Node\Expr;
 use PhpParser\Node\FunctionLike;
 use PhpParser\Node\Stmt;
+use TypePhp\Type;
 
 /**
  * Proves the deliberately small set of local Closures which can stay entirely
@@ -20,7 +21,7 @@ use PhpParser\Node\Stmt;
  */
 final class LocalClosureAnalyzer
 {
-    /** @var array<string, array{assignment: Expr\Assign, closure: Expr\Closure|Expr\ArrowFunction, calls: int}> */
+    /** @var array<string, array{assignment: Expr\Assign, closure: Expr\Closure|Expr\ArrowFunction, calls: int, callSites: list<Expr\FuncCall>}> */
     private array $candidates = [];
 
     /** @var array<string, true> */
@@ -31,7 +32,7 @@ final class LocalClosureAnalyzer
 
     /**
      * @param list<Stmt> $statements
-     * @return array<string, array{assignment: Expr\Assign, closure: Expr\Closure|Expr\ArrowFunction, calls: int}>
+     * @return array<string, array{assignment: Expr\Assign, closure: Expr\Closure|Expr\ArrowFunction, calls: int, callSites: list<Expr\FuncCall>}>
      */
     public function analyze(array $statements): array
     {
@@ -63,6 +64,7 @@ final class LocalClosureAnalyzer
                 'assignment' => $statement->expr,
                 'closure' => $statement->expr->expr,
                 'calls' => 0,
+                'callSites' => [],
             ];
         }
 
@@ -104,7 +106,7 @@ final class LocalClosureAnalyzer
         return !$this->containsUnsupportedClosureNode($body, false);
     }
 
-    private function containsUnsupportedClosureNode(mixed $value, bool $root = true): bool
+    private function containsUnsupportedClosureNode(mixed $value, bool $root): bool
     {
         foreach (is_array($value) ? $value : [$value] as $node) {
             if (!$node instanceof Node) {
@@ -150,6 +152,11 @@ final class LocalClosureAnalyzer
         foreach (is_array($value) ? $value : [$value] as $node) {
             if (!$node instanceof Node) {
                 continue;
+            }
+
+            // All candidates invalidated — nothing left to scan
+            if ($this->candidates === []) {
+                return;
             }
 
             // Textual order is not a dominance proof in the presence of goto:
@@ -205,6 +212,7 @@ final class LocalClosureAnalyzer
         }
 
         $this->candidates[$name]['calls']++;
+        $this->candidates[$name]['callSites'][] = $parent;
     }
 
     private function isSupportedDirectCall(Expr\FuncCall $call, int $parameterCount): bool
@@ -218,5 +226,130 @@ final class LocalClosureAnalyzer
             }
         }
         return true;
+    }
+
+    /**
+     * Infer native C++ types for closure parameters from call-site arguments.
+     *
+     * Returns Type::VAR for each parameter when there are zero or multiple
+     * call sites (conservative fallback). When exactly one call site exists,
+     * returns the detected type for each argument position.
+     */
+    public function inferParamTypes(array $candidate): array
+    {
+        $closure = $candidate['closure'];
+        $paramCount = count($closure->params);
+        $callSites = $candidate['callSites'];
+
+        if (count($callSites) !== 1) {
+            return array_fill(0, $paramCount, Type::VAR);
+        }
+
+        $call = $callSites[0];
+        $inferredTypes = [];
+
+        foreach ($call->args as $i => $arg) {
+            $type = $this->detectArgType($arg->value);
+            $inferredTypes[$i] = $type;
+        }
+
+        return $inferredTypes;
+    }
+
+    /**
+     * Infer the native C++ type for a single call-site argument expression.
+     *
+     * This method is only called when inferParamTypes has confirmed exactly one
+     * call site. For multi-call scenarios, inferParamTypes returns Type::VAR
+     * for all parameters without invoking this method.
+     *
+     * @param Expr $expr The argument expression from the call site
+     * @return string Type constant (Type::INT, Type::FLOAT, etc.)
+     */
+    private function detectArgType(Expr $expr): string
+    {
+        if ($expr instanceof Node\Scalar\Int_) {
+            return Type::INT;
+        }
+
+        if ($expr instanceof Node\Scalar\Float_) {
+            return Type::FLOAT;
+        }
+
+        if ($expr instanceof Node\Scalar\String_) {
+            return Type::STR;
+        }
+
+        if ($expr instanceof Expr\UnaryMinus || $expr instanceof Expr\UnaryPlus) {
+            return $this->detectArgType($expr->expr);
+        }
+
+        // Explicit type casts — the result type is determined by the cast
+        if ($expr instanceof Expr\Cast\Int_) {
+            return Type::INT;
+        }
+        if ($expr instanceof Expr\Cast\Double) {
+            return Type::FLOAT;
+        }
+        if ($expr instanceof Expr\Cast\String_) {
+            return Type::STR;
+        }
+        if ($expr instanceof Expr\Cast\Bool_) {
+            return Type::BOOL;
+        }
+
+        if ($expr instanceof Expr\BooleanNot
+            || $expr instanceof Expr\BinaryOp\BooleanAnd
+            || $expr instanceof Expr\BinaryOp\BooleanOr
+            || $expr instanceof Expr\BinaryOp\LogicalAnd
+            || $expr instanceof Expr\BinaryOp\LogicalOr
+            || $expr instanceof Expr\BinaryOp\Identical
+            || $expr instanceof Expr\BinaryOp\NotIdentical
+            || $expr instanceof Expr\BinaryOp\Equal
+            || $expr instanceof Expr\BinaryOp\NotEqual
+            || $expr instanceof Expr\BinaryOp\Smaller
+            || $expr instanceof Expr\BinaryOp\SmallerOrEqual
+            || $expr instanceof Expr\BinaryOp\Greater
+            || $expr instanceof Expr\BinaryOp\GreaterOrEqual
+            || $expr instanceof Expr\BinaryOp\Spaceship
+            || $expr instanceof Expr\Instanceof_
+        ) {
+            return Type::BOOL;
+        }
+
+        if ($expr instanceof Expr\BinaryOp\Concat) {
+            $left = $this->detectArgType($expr->left);
+            $right = $this->detectArgType($expr->right);
+            // PHP's . operator: if either operand is a string, the result is a string
+            if ($left === Type::STR || $right === Type::STR) {
+                return Type::STR;
+            }
+            return Type::VAR;
+        }
+
+        if ($expr instanceof Expr\ConstFetch && $expr->name instanceof Node\Name) {
+            $name = strtolower($expr->name->toString());
+            if ($name === 'true' || $name === 'false') {
+                return Type::BOOL;
+            }
+            return Type::VAR;
+        }
+
+        if ($expr instanceof Expr\Array_) {
+            return Type::ARRAY;
+        }
+
+        if ($expr instanceof Expr\Variable) {
+            return Type::VAR;
+        }
+
+        if ($expr instanceof Expr\FuncCall && $expr->name instanceof Node\Name) {
+            $name = strtolower($expr->name->toString());
+            if (in_array($name, ['count', 'strlen', 'sizeof'], true)) {
+                return Type::INT;
+            }
+        }
+
+        return Type::VAR;
     }
 }
