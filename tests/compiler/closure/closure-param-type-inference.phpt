@@ -14,7 +14,7 @@ function main(): void
     $fn3 = fn($x) => !$x;
     var_dump($fn3(true));
 
-    $fn4 = fn($x) => $x;
+    $fn4 = fn($x) => count($x);
     var_dump($fn4([1, 2]));
 
     $fn5 = fn(int $x) => $x + 1;
@@ -24,8 +24,6 @@ function main(): void
     var_dump($fn6(42));
     var_dump($fn6(3.14));
 }
-
-main();
 --EXPECT--
 int(43)
 float(6.28)
