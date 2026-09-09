@@ -24,6 +24,7 @@ function main(): void
     var_dump($fn6(42));
     var_dump($fn6(3.14));
 }
+?>
 --EXPECT--
 int(43)
 float(6.28)
